@@ -5,7 +5,7 @@
 
 #### Author: Thomas Willems <hipstrtool@gmail.com>
 
-#### Optimizer: Joachim Galil <joachimbgalil@gmail.com>, Turakhia Lab -- the Gymrek Lab asked for the performance work in this fork
+#### Optimizer: Joachim Galil <joachimbgalil@gmail.com>, Turakhia Lab -- in association with the Gymrek Lab
 
 #### License: GNU v2
 
@@ -31,18 +31,22 @@
 [Citation](#citation)
 
 ## Introduction
-Short tandem repeats [(STRs)](http://en.wikipedia.org/wiki/Microsatellite) are genomic sequences that contain many copies of a short motif. The genomes of most organisms contain STRs. STRs are important, because they change much more quickly than other genomic elements. Thus they give much information for genomic identification, ancestry inference, and genealogy.
+Short tandem repeats [(STRs)](http://en.wikipedia.org/wiki/Microsatellite) are highly repetitive genomic sequences comprised of repeated copies of an underlying motif. Prevalent in most organisms' genomes, STRs are of particular interest because they mutate much more rapidly than most other genomic elements. As a result, they're extremely informative for genomic identification, ancestry inference and genealogy.
 
-But STRs are difficult to genotype. The repetitive sequence that causes the high rate of change also causes frequent alignment errors. These errors make the subsequent analyses difficult, and can cause a bias. PCR stutter errors also cause reads that contain more repeat copies, or fewer repeat copies, than the correct genotype.
+Despite their utility, STRs are particularly difficult to genotype. The repetitive sequence responsible for their high mutability also results in frequent alignment errors that can complicate and bias downstream analyses. In addition, PCR stutter errors often result in reads that contain additional or fewer repeat copies than the true underlying genotype.
 
-**HipSTR-MT** decreases the effect of these errors and gives more reliable STR genotypes. HipSTR-MT does these four functions:
+**HipSTR** was specifically developed to deal with these errors in the hopes of obtaining more robust STR genotypes. In particular, it accomplishes this by:
 
-1. It learns a PCR stutter model for each locus with an [EM algorithm](http://en.wikipedia.org/wiki/Expectation-maximization_algorithm).
-2. It finds candidate STR alleles in population-scale sequencing data.
-3. It aligns the reads to the candidate alleles with a special hidden Markov model that includes the STR artifacts.
-4. It uses phased SNP haplotypes to genotype and to phase the STRs.
+1. Learning locus-specific PCR stutter models using an [EM algorithm](http://en.wikipedia.org/wiki/Expectation-maximization_algorithm).
+2. Mining candidate STR alleles from population-scale sequencing data
+3. Employing a specialized hidden Markov model to align reads to candidate alleles while accounting for STR artifacts
+4. Utilizing phased SNP haplotypes to genotype and phase STRs
 
-We think that these four functions make **HipSTR-MT** the most reliable tool to genotype STRs from **Illumina** sequencing data.
+In our opinion, all of these factors make HipSTR the most reliable tool for genotyping STRs from Illumina sequencing data.
+
+The original HipSTR repo is under tfwillems.
+A fork with some minor bug fixes and feature updates is maintained by gymrek-lab.
+**HipSTR-MT** is a fork of the gymrek-lab version with most usage remaining the same but with new flags and capabilities added for dramatic speedups (32.5x speedup at 64 threads on full 1.5M+ locus NA12891 sample)
 
 ## Requirements
 
@@ -64,7 +68,7 @@ On Ubuntu and Debian, this command installs all the packages in the list above. 
 The CI workflow ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs this same command before each build. Thus the command stays correct for the compilation of this project.
 
 ## Installation
-This repository contains the Taskflow headers and the necessary mimalloc source directly, in the same manner as `lib/htslib`. These libraries are not git submodules. Thus a usual clone is sufficient. You do not need `--recurse-submodules`, and you do not need to remember `git submodule update --init --recursive`.
+This repository contains the Taskflow headers and the necessary mimalloc source directly, in the same manner as `lib/htslib`. These libraries are not git submodules. Thus a usual clone is sufficient.
 
     git clone https://github.com/TurakhiaLab/HipSTR-MT
 
@@ -94,7 +98,7 @@ A draft recipe is in [recipe/](recipe/meta.yaml) for a subsequent submission to 
 
 `test/run_tests.sh` is self-contained. It builds the components that it needs, and it uses only the fixture data in `test/`. It does not download data.
 
-**Correctness regression** (`test/check_correctness.sh`). This is the primary check, and a JOSS-style review will most probably examine it first. The script runs `HipSTR-MT` against two fixtures in this repository. It uses more than one value of `--threads` (the default values are 1, 2, 4, and 8, but the script does not use more threads than the number of cores in the machine). For each fixture, it compares the output of each thread count against one golden VCF file with `test/compare_vcf_tolerant.py`. Each golden VCF file is the output of the unmodified upstream `gymrek-lab/HipSTR` on the same fixture. Thus this one comparison checks the two conditions on which the correctness claim of this fork is based:
+**Correctness regression** (`test/check_correctness.sh`).The script runs `HipSTR-MT` against two fixtures in this repository. It uses more than one value of `--threads` (the default values are 1, 2, 4, and 8, but the script does not use more threads than the number of cores in the machine). For each fixture, it compares the output of each thread count against one golden VCF file with `test/compare_vcf_tolerant.py`. Each golden VCF file is the output of the unmodified upstream `gymrek-lab/HipSTR` on the same fixture. Thus this one comparison checks the two conditions on which the correctness claim of this fork is based:
 
 1. The genotype calls do not change when the thread count changes.
 2. The genotype calls agree with the unmodified upstream `gymrek-lab/HipSTR` -- refer to [Correctness](#hipstr-mt-changes) below. The most recent check found 0 discrepancies on the full tutorial trio of 599 loci, on a full-genome NA12891 run of 1,512,240 loci, and on a full-genome NA12892 run of 1,171,158 loci, at `--threads` 1 to 64.
@@ -130,9 +134,9 @@ The most generally applicable mode of HipSTR-MT processes **all the samples toge
 
 For each region in *str_regions.bed*, **HipSTR-MT** does these three steps:
 
-1. It learns a stutter model for the locus.
-2. It uses the stutter model and the haplotype-based alignment algorithm to genotype each person.
-3. It writes the STR genotypes to *str_calls.vcf.gz*, a [bgzipped](http://www.htslib.org/doc/tabix.html) [VCF](#str-vcf) file. This VCF file contains the calls for each sample in the read groups of the BAM/CRAM files.
+1. learn a stutter model for the locus
+2. Ues the stutter model and the haplotype-based alignment algorithm to genotype each individual
+3. Output the resulting STR genotypes to *str_calls.vcf.gz*, a [bgzipped](http://www.htslib.org/doc/tabix.html) [VCF](#str-vcf) file. This VCF will contain calls for each sample in any of the BAM/CRAM files' read groups.
 
 ## HipSTR-MT Changes
 HipSTR-MT is a performance fork of [gymrek-lab/HipSTR](https://github.com/gymrek-lab/HipSTR). All the data below is a comparison with that baseline.
@@ -176,6 +180,8 @@ Two parts of the initial single-threaded code kept a mutable state. This state i
 
 ## Tutorial
 This [tutorial](https://hipstr-tool.github.io/HipSTR-tutorial/) shows how to apply HipSTR-MT to whole-genome sequencing data. In less than 10 minutes, it shows how to genotype approximately 600 STRs in a trio of persons with deep sequencing, and how to examine the results.
+
+**NOTE:** clone from https://github.com/TurakhiaLab/HipSTR-MT instead of the original repo and use *HipSTR-MT* in place of all references to *HipSTR* in the tutorial, as the tutorial is for the original version.
 
 ## In-depth Usage
 **HipSTR-MT** has different usage options for sequencing data with a different number of samples and a different coverage. Most conditions are in one of these four categories:

@@ -28,7 +28,7 @@ affiliations:
   - name: Department of Electrical and Computer Engineering, University of California San Diego, San Diego, CA 92093, USA
     index: 1
     ror: 0168r3w48
-  - name: Department of Medicine, University of California San Diego, San Diego, CA 92093, USA
+  - name: Department of Medicine,  Department of Pediatrics, and Department of Computer Science & Engineering University of California San Diego, San Diego, CA 92093, USA
     index: 2
     ror: 0168r3w48
 date: 7 September 2026
@@ -45,7 +45,7 @@ Genome-wide STR genotyping is computationally intensive: for each locus, HipSTR 
 
 # State of the Field
 
-HipSTR is one of several tools for genome-wide STR genotyping from short-read data, alongside GangSTR and ExpansionHunter, which additionally use mate-pair distance to detect STR expansions longer than a single read [@oketch2024]. Independent benchmarking shows GangSTR and ExpansionHunter can outperform HipSTR on call rate and memory usage, but HipSTR remains competitive in genotyping accuracy for common STR loci, including the CODIS core STRs used in forensics [@oketch2024]. None of these tools natively parallelizes within a single sample; throughput on large cohorts is instead typically achieved through cluster-based job scheduling across many machines [@ahmad2022; @mirchandani2024], which increases aggregate throughput but not per-sample latency, and assumes multi-node HPC access. HipSTR-MT takes a complementary approach: intra-run thread-level parallelism so a single workstation can genotype a sample or region substantially faster, while leaving HipSTR's statistical model and output format unchanged.
+HipSTR is one of several tools for genome-wide STR genotyping from short-read data, alongside GangSTR and ExpansionHunter, which additionally use mate-pair distance to detect STR expansions longer than a single read [@oketch2024]. Independent benchmarking shows GangSTR and ExpansionHunter can outperform HipSTR on call rate and memory usage, but HipSTR remains competitive in genotyping accuracy for common STR loci, including the CODIS core STRs used in forensics [@oketch2024], additionally, a unique advantage of HipSTR is that it infers sequence in addition to length variation and models haplotypes jointly across samples. None of these tools natively parallelizes within a single sample; throughput on large cohorts is instead typically achieved through cluster-based job scheduling across many machines [@ahmad2022; @mirchandani2024], which increases aggregate throughput but not per-sample latency, and assumes multi-node HPC access. HipSTR-MT takes a complementary approach: intra-run thread-level parallelism so a single workstation can genotype a sample or region substantially faster, while leaving HipSTR's statistical model and output format unchanged.
 
 ![Overview of the HipSTR-MT genotyping pipeline. A serial dispatch stage (1) creates one token per genomic region and loads the needed chromosome. Regions are distributed across parallel worker lines (2), each performing BAM/CRAM seeking, read filtering, SNP-based phasing, haplotype construction, and HMM-based realignment. A serial output stage (3) collects results and writes VCF, log, and BAM output in the original region order regardless of worker completion order, guaranteeing output identical to the serial tool.\label{fig:pipeline}](figures/figure1_pipeline.png)
 
@@ -53,7 +53,7 @@ HipSTR is one of several tools for genome-wide STR genotyping from short-read da
 
 The unit of work is the genomic region: regions are independent under HipSTR's model and map cleanly onto the existing per-locus loop. Rather than a parallel loop over regions, HipSTR-MT uses the three-stage Taskflow pipeline in \autoref{fig:pipeline}: serial dispatch, parallel workers, serial ordered output. The serial stages bound achievable scaling, but they let the tool emit VCF, log, and BAM records in the original region order regardless of which worker finishes first, keeping output directly comparable with the serial tool.
 
-Treating that comparability as a hard constraint drove two trade-offs. Multiply-add contraction is disabled (`-ffp-contract=off`), giving up vectorization headroom to keep results bit-identical across instruction sets, since silent numerical divergence would make the fork unusable as a drop-in replacement. Each worker also keeps four region contexts in flight, with independent reader and alignment state, so the work-stealing scheduler can hide I/O and memory latency; this raises peak memory from ~1.6 GB to ~8 GB at 64 threads, favoring wall-clock time on machines where cores are scarcer than RAM.
+Treating that comparability as a hard constraint drove two trade-offs. Multiply-add contraction is disabled (compiler flag:`-ffp-contract=off`), giving up vectorization headroom to keep results bit-identical across instruction sets, since silent numerical divergence would make the fork unusable as a drop-in replacement. Each worker also keeps four region contexts in flight, with independent reader and alignment state, so the work-stealing scheduler can hide I/O and memory latency; this raises peak memory from ~1.6 GB to ~8 GB at 64 threads, favoring wall-clock time on machines where cores are scarcer than RAM.
 
 Thread safety required eliminating two pieces of shared mutable state: `StutterAlignerClass`'s scratch buffers, moved into a per-`HapAligner` workspace, and the non-reentrant Cephes `bdtr` function, now mutex-guarded. Further optimizations include a shared chromosome cache, mimalloc [@leijen2019], an htslib upgrade, and SIMD dispatch via compiler target clones — improving single-threaded performance as well. Three additive flags extend the CLI without breaking backward compatibility.
 
@@ -71,9 +71,6 @@ Thread safety required eliminating two pieces of shared mutable state: `StutterA
 |                 +-----------------------------+------------------------------------------------------------+
 |                 | Lock-free VCF records       | Workers render VCF lines as text without holding the       |
 |                 |                             | output lock.                                               |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | `--threads` flag            | Sets worker thread count; auto-detected from hardware if   |
-|                 |                             | unset.                                                     |
 +-----------------+-----------------------------+------------------------------------------------------------+
 | Thread safety   | StutterAligner buffers      | Per-`HapAligner` scratch buffers eliminate a shared-state  |
 |                 |                             | race.                                                      |
@@ -95,7 +92,7 @@ Thread safety required eliminating two pieces of shared mutable state: `StutterA
 |                 | Chromosome cache + eviction | Chromosomes shared across workers instead of duplicating   |
 |                 |                             | per thread. Evicted once there are no workers using it.    |
 +-----------------+-----------------------------+------------------------------------------------------------+
-| Vectorization   | `-flto=auto`                | Enables link-time optimization across translation units.   |
+| Vectorization   | `-flto=auto`(compiler flag) | Enables link-time optimization across translation units.   |
 |                 +-----------------------------+------------------------------------------------------------+
 |                 | `target_clones` dispatch    | Builds one code variant per ISA; dispatches to the best at |
 |                 |                             | runtime.                                                   |
@@ -107,12 +104,15 @@ Thread safety required eliminating two pieces of shared mutable state: `StutterA
 |                 |                             | `vfasterexp()`.                                            |
 |                 +-----------------------------+------------------------------------------------------------+
 |                 | `-ffp-contract=off`         | Disables multiply-add fusion to keep output bit-identical  |
-|                 |                             | across ISAs.                                               |
+|                 | (compiler flag)             | across ISAs.                                               |
 +-----------------+-----------------------------+------------------------------------------------------------+
 | Dependency/IO   | htslib 1.9 -> 1.24          | Replaces byte-at-a-time FASTA reads with a block-read      |
 |                 |                             | implementation.                                            |
 |                 +-----------------------------+------------------------------------------------------------+
 |                 | libdeflate enabled          | Activates a previously unused BGZF decompression path.     |
++-----------------+-----------------------------+------------------------------------------------------------+
+|                 | `--threads` flag            | Sets worker thread count; auto-detected from hardware if   |
+|                 |                             | unset.                                                     |
 +-----------------+-----------------------------+------------------------------------------------------------+
 | CLI flags       | `--lib-from-samp`           | Assigns library name from sample name when LB tags are     |
 |                 |                             | absent.                                                    |
@@ -121,7 +121,7 @@ Thread safety required eliminating two pieces of shared mutable state: `StutterA
 |                 |                             | haplotypes.                                                |
 +-----------------+-----------------------------+------------------------------------------------------------+
 
-: Summary of code-level changes introduced in HipSTR-MT, grouped by category (parallelization, thread safety, memory, vectorization, dependency/I/O, and CLI flags), with the effect of each change on behavior or performance. Full implementation detail for each entry is provided in the repository README.
+: Summary of code-level changes introduced in HipSTR-MT, grouped by category (parallelization, thread safety, memory, vectorization, dependency/I/O, and CLI flags), with the effect of each change on behavior or performance. Items are code changes unless specified as compiler flags. Full implementation detail for each entry is provided in the repository README.
 
 # Performance and correctness
 
