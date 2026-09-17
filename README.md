@@ -139,7 +139,7 @@ For each region in *str_regions.bed*, **HipSTR-MT** does these three steps:
 3. Output the resulting STR genotypes to *str_calls.vcf.gz*, a [bgzipped](http://www.htslib.org/doc/tabix.html) [VCF](#str-vcf) file. This VCF will contain calls for each sample in any of the BAM/CRAM files' read groups.
 
 ## HipSTR-MT Changes
-HipSTR-MT is a performance fork of [gymrek-lab/HipSTR](https://github.com/gymrek-lab/HipSTR). All the data below is a comparison with that baseline.
+HipSTR-MT is a performance fork of [gymrek-lab/HipSTR](https://github.com/gymrek-lab/HipSTR) maintained by Turakhia Lab. All the data below is a comparison with that baseline.
 
 **Correctness**: we compared the output of HipSTR-MT with the output of the HipSTR version of the Gymrek Lab. The comparator permits small differences: the genotype calls must agree exactly, but a float-type field can have a relative difference of less than 1e-3. The genotype calls and all the derived statistics now agree exactly (0 difference) on the tutorial trio of 599 loci, on a full-genome NA12891 run of 1,512,240 loci, and on a full-genome NA12892 run of 1,171,158 loci. These comparisons found two correctness bugs, and we corrected both. The first was in the target_clones dispatch -- refer to [Vectorization](#vectorization). The second was a single-precision accumulator in `fast_exp_sum`: it changed the alleles that the program found at one homopolymer locus of the 1,171,158 loci of NA12892. The `test/homopolymer` fixture now holds that locus -- refer to [Testing](#testing).
 
