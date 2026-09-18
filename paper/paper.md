@@ -18,7 +18,7 @@ authors:
     affiliation: 1
   - name: Melissa Gymrek
     orcid: 0000-0002-6086-3903
-    affiliation: 2
+    affiliation: "2, 3, 4"
   - name: Yatish Turakhia
     orcid: 0000-0001-5600-2900
     corresponding: true
@@ -28,8 +28,14 @@ affiliations:
   - name: Department of Electrical and Computer Engineering, University of California San Diego, San Diego, CA 92093, USA
     index: 1
     ror: 0168r3w48
-  - name: Department of Medicine, Department of Pediatrics, and Department of Computer Science & Engineering, University of California San Diego, San Diego, CA 92093, USA
+  - name: Department of Medicine, University of California San Diego, San Diego, CA 92093, USA
     index: 2
+    ror: 0168r3w48
+  - name: Department of Pediatrics, University of California San Diego, San Diego, CA 92093, USA
+    index: 3
+    ror: 0168r3w48
+  - name: Department of Computer Science & Engineering, University of California San Diego, San Diego, CA 92093, USA
+    index: 4
     ror: 0168r3w48
 date: 7 September 2026
 bibliography: paper.bib
