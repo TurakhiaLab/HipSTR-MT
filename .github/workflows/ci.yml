@@ -8,7 +8,10 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    # Pinned rather than ubuntu-latest, which moves to Ubuntu 26 on 2026-10-19:
+    # package names in the apt step can change between releases, and this is
+    # the environment the README's install command is verified against.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
