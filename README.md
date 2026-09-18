@@ -5,11 +5,9 @@
 
 #### Author: Thomas Willems <hipstrtool@gmail.com>
 
-#### Optimizer: Joachim Galil <joachimbgalil@gmail.com>, Turakhia Lab -- in association with the Gymrek Lab
+#### Optimizer: Joachim Galil <joachimbgalil@gmail.com>, Turakhia Lab -- in collaboration with the Gymrek Lab
 
 #### License: GNU v2
-
-*This document is written in ASD-STE100 Simplified Technical English.*
 
 [Introduction](#introduction)  
 [Requirements](#requirements)  
@@ -61,7 +59,7 @@ A fork with some minor bug fixes and feature updates is maintained by gymrek-lab
 
 This repository contains its own copy of the HTSlib source in `lib/htslib`, and the build makes HTSlib from that source. The repository also contains its own copies of mimalloc, libdeflate, and Taskflow in `lib/`. Thus the system does not need a `libhts`/`htslib` package, and the build does not use one.
 
-On Ubuntu and Debian, this command installs all the packages in the list above. It does not install make and g++, because these two programs are usually already installed.
+On Ubuntu and Debian, this command installs all the packages in the list above.
 
     apt install make g++ cmake zlib1g-dev libbz2-dev liblzma-dev libcurl4-openssl-dev libssl-dev
 

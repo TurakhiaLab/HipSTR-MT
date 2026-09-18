@@ -118,7 +118,7 @@ Thread safety required eliminating two pieces of shared mutable state: `StutterA
 |                 +-----------------------------+------------------------------------------------------------+
 |                 | libdeflate enabled          | Activates a previously unused BGZF decompression path.     |
 +-----------------+-----------------------------+------------------------------------------------------------+
-| CLI flags       | `--threads` flag            | Sets worker thread count; auto-detected from hardware if   |
+| CLI flags       | `--threads`                 | Sets worker thread count; auto-detected from hardware if   |
 |                 |                             | unset.                                                     |
 |                 +-----------------------------+------------------------------------------------------------+
 |                 | `--lib-from-samp`           | Assigns library name from sample name when LB tags are     |
@@ -141,7 +141,7 @@ Benchmarks used the NA12891 sample (accession ERR194160) against the genome-wide
   --str-vcf output.vcf.gz --min-reads 25 --def-stutter-model --threads N
 ```
 
-with $N \in \{1, 2, 4, 8, 16, 32, 64\}$, measured via `/usr/bin/time -v` on dual Intel Xeon Silver 4216 CPUs (64 logical CPUs), Ubuntu 22.04. As \autoref{fig:performance} shows, HipSTR-MT at 64 threads finishes in 24.6 minutes versus 13.3 hours for the unmodified serial baseline (a 32.5× reduction), already including the non-parallel optimizations above, so even single-threaded HipSTR-MT is measurably faster than upstream. Scaling is near-linear through 16 threads (94% efficiency), tapering to 51% by 64 threads as SMT contention and the pipeline's mandatory serial stages dominate; per-locus haplotype alignment and traceback work is small, memory-irregular, and imbalanced across loci, leaving some workers idle.
+with $N \in \{1, 2, 4, 8, 16, 32, 64\}$, measured via `/usr/bin/time -v` on dual Intel Xeon Silver 4216 CPUs (64 logical CPUs), Ubuntu 20.04. As \autoref{fig:performance} shows, HipSTR-MT at 64 threads finishes in 24.6 minutes versus 13.3 hours for the unmodified serial baseline (a 32.5× reduction), already including the non-parallel optimizations above, so even single-threaded HipSTR-MT is measurably faster than upstream. Scaling is near-linear through 16 threads (94% efficiency), tapering to 51% by 64 threads as SMT contention and the pipeline's mandatory serial stages dominate; per-locus haplotype alignment and traceback work is small, memory-irregular, and imbalanced across loci, leaving some workers idle.
 
 Output equivalence was verified at every thread count with a tolerant VCF comparator requiring exact genotype-call matches and allowing $\leq 10^{-3}$ relative drift in floating-point fields (GLDIFF, PDP) from SIMD/codegen-dependent summation order. All genotype records were identical across thread counts. Maximum RSS grows with in-flight regions: ~8 GB at 64 threads versus ~1.6 GB at 1 thread.
 
