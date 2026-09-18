@@ -91,7 +91,7 @@ First, `make pgo` compiles an instrumented `HipSTR-MT`. Then it trains that prog
 **Caution: do not use `make pgo` at this time.** On GCC 11.4 and GCC 13.1, `make pgo` makes a binary that is 5-7% *slower* than the binary from the usual `make`. An unwanted interaction between `-fprofile-use` and `-flto=auto` causes this decrease in speed. Refer to the PGO section of the Makefile for more data. Use the usual `make` until this interaction has a solution.
 
 ### Conda/Bioconda
-A draft recipe is in [recipe/](recipe/meta.yaml) for a subsequent submission to [bioconda-recipes](https://github.com/bioconda/bioconda-recipes). The recipe uses the source tarball of the applicable release. The recipe does not contain the sha256 checksum of that tarball, because a tarball cannot contain its own checksum. The GitHub Release notes of each tag give the checksum, and the recipe shows the command that calculates it again. You must add the checksum when you copy the recipe into a bioconda-recipes pull request. Nobody has sent the recipe to Bioconda yet. Until the recipe is available there, build the program from the source as above.
+A recipe for [bioconda-recipes](https://github.com/bioconda/bioconda-recipes) is in [recipe/](recipe/meta.yaml). The recipe uses the source tarball of the applicable release. The recipe does not contain the sha256 checksum of that tarball, because a tarball cannot contain its own checksum. The GitHub Release notes of each tag give the checksum, and the recipe shows the command that calculates it again. You must add the checksum when you copy the recipe into a bioconda-recipes pull request. The recipe was submitted to bioconda-recipes (PR #68916) and is under review. Until the recipe is available there, build the program from the source as above.
 
 ## Testing
     test/run_tests.sh
@@ -252,7 +252,7 @@ STRs are repetitive. Thus a read that does not go fully across the repeat gives 
 
 In our tests, 100 bp Illumina reads are sufficient for most of the STRs in the human genome. But an STR that is longer than 70 bp (for example a very long forensic STR) always needs longer reads. Most human STRs are shorter than 70 bp. This read length is also sufficient for most model organisms, if their repeats are not much longer than the human repeats.
 
-The best minimum sequencing depth is a function of your analysis. If you examine how the STRs change, or if you [want to find de novo mutations](#de-novo-mutations), use a minimum coverage of 30x. This coverage lets HipSTR-MT give the necessary high specificity. If you only examine the allele frequencies of the STRs in a population, a coverage of 10x is usually sufficient. But at this coverage there are many genotype errors, in which the program calls a heterozygous genotype as a homozygous genotype.
+The best minimum sequencing depth is a function of your analysis. If you examine how the STRs change, or if you want to find de novo mutations, use a minimum coverage of 30x. This coverage lets HipSTR-MT give the necessary high specificity. If you only examine the allele frequencies of the STRs in a population, a coverage of 10x is usually sufficient. But at this coverage there are many genotype errors, in which the program calls a heterozygous genotype as a homozygous genotype.
 
 **min-reads** is an important option for your type of sequencing data. HipSTR-MT does not genotype an STR if the number of reads for all the persons is less than *N*. The default value is 100, because this is a good minimum threshold to learn a stutter model before the genotyping. If you analyze very few samples (for example one trio of a mother, a father, and a child), decrease this threshold, because you seldom have 100 reads. In this condition, use options such as **--min-reads 15 --def-stutter-model**. The second option uses a default stutter model, because there are too few reads to learn an accurate model. But if you analyze many samples (for example more than ten 30x genomes, or more than thirty 10x genomes), do not change this parameter. In these conditions, a region with less than 100 reads can have a high GC content that is difficult for Illumina sequencing, can be difficult to map, or can be too long for your read length.
 
@@ -562,6 +562,8 @@ If you have a question about the genotyping model or the algorithm, which this f
 
      i.  Make an issue on GitHub (https://github.com/tfwillems/HipSTR)
     ii. Send an email to hipstrtool@gmail.com
+
+If you want to contribute code, tests, or documentation, read [CONTRIBUTING.md](CONTRIBUTING.md) first. It tells you how to report a bug, how to make a pull request, and how to keep the output identical to the upstream HipSTR.
 
 ## Citation
 If HipSTR-MT was useful for your work, cite these publications:
