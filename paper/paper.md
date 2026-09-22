@@ -39,6 +39,34 @@ affiliations:
     ror: 0168r3w48
 date: 18 September 2026
 bibliography: paper.bib
+# Table 1 is raw LaTeX so its rows can have dividers and the table can only
+# break across pages between categories. `tables`/`multirow` make the template
+# load the table packages. The helper commands live here, where only the PDF
+# sees them; the JATS build parses the table itself and drops them.
+#  - \itemrule: thin rule under the Change/Effect columns that, unlike
+#    \cmidrule, forbids a page break on either side (0.165 = Category width).
+#  - \raggedcells: ragged-right table cells; a >{\raggedright} column prefix
+#    would stop pandoc's LaTeX reader from parsing \multirow for JATS.
+#  - \firstheadrow: the header row for page 1 only (the caption goes with
+#    it). The repeated header after it must stay plain LaTeX, since that
+#    is the header row JATS picks up; keep the two in sync.
+# Keep "\endhead%" as is: a line break after \endhead makes the reader drop
+# the first category label.
+tables: true
+multirow: true
+header-includes: |
+  ```{=latex}
+  \makeatletter
+  \newcommand{\itemrule}{\noalign{\nobreak\vskip\aboverulesep\prevdepth=-1000pt
+    \moveright\dimexpr0.165\dimexpr\linewidth-4\tabcolsep\relax+2\tabcolsep\relax
+    \vbox{\hrule width\dimexpr0.835\dimexpr\linewidth-4\tabcolsep\relax+2\tabcolsep\relax
+      height\cmidrulewidth}%
+    \nobreak\vskip\belowrulesep\prevdepth=-1000pt\nobreak}}
+  \newcommand{\raggedcells}{\let\hmt@arrayparboxrestore\@arrayparboxrestore
+    \def\@arrayparboxrestore{\hmt@arrayparboxrestore\raggedright\let\\\tabularnewline}}
+  \newcommand{\firstheadrow}{\toprule Category & Change & Effect \\ \midrule}
+  \makeatother
+  ```
 ---
 
 # Summary
@@ -63,76 +91,68 @@ Treating that comparability as a hard constraint drove two trade-offs. Multiply-
 
 Thread safety required eliminating two pieces of shared mutable state: `StutterAlignerClass`'s scratch buffers, moved into a per-`HapAligner` workspace, and the non-reentrant Cephes `bdtr` function, now mutex-guarded. Further optimizations include a shared chromosome cache, mimalloc [@leijen2019], an htslib upgrade, and SIMD dispatch via compiler target clones — improving single-threaded performance as well. Three additive flags extend the CLI without breaking backward compatibility.
 
-+-----------------+-----------------------------+------------------------------------------------------------+
-| Category        | Change                      | Effect                                                     |
-+=================+=============================+============================================================+
-| Parallelization | Taskflow pipeline           | Reads, filters, and writes regions across three concurrent |
-|                 |                             | stages.                                                    |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | SNP-phasing safety          | Mutexes protect shared phasing state across worker         |
-|                 |                             | threads.                                                   |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | Output buffering            | Per-thread output buffers are flushed in original region   |
-|                 |                             | order.                                                     |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | Lock-free VCF records       | Workers render VCF lines as text without holding the       |
-|                 |                             | output lock.                                               |
-+-----------------+-----------------------------+------------------------------------------------------------+
-| Thread safety   | StutterAligner buffers      | Per-`HapAligner` scratch buffers eliminate a shared-state  |
-|                 |                             | race.                                                      |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | Cephes `bdtr` mutex         | Guards a non-reentrant function used in allele-bias        |
-|                 |                             | computation.                                               |
-+-----------------+-----------------------------+------------------------------------------------------------+
-| Memory          | HapAligner buffer reuse     | Reuses per-aligner scratch buffers across reads instead of |
-|                 |                             | reallocating.                                              |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | ASCII case conversion       | Replaces locale-aware `toupper`/`tolower` in hot per-base  |
-|                 |                             | loops.                                                     |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | `fast_log_sum_exp` overload | Pointer-pair variant avoids a vector copy at call sites.   |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | mimalloc                    | Reduces allocator overhead from small per-read/per-locus   |
-|                 |                             | allocations.                                               |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | Chromosome cache + eviction | Chromosomes shared across workers instead of duplicating   |
-|                 |                             | per thread. Evicted once there are no workers using it.    |
-+-----------------+-----------------------------+------------------------------------------------------------+
-| Vectorization   | `-flto=auto`                | Enables link-time optimization across translation units.   |
-|                 | (compiler flag)             |                                                            |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | `target_clones` dispatch    | Builds one code variant per ISA; dispatches to the best at |
-|                 |                             | runtime.                                                   |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | libmvec `exp()`             | Vectorizes the exponential reduction with                  |
-|                 |                             | correctly-rounded results.                                 |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | SSE batching                | Processes four elements per instruction via                |
-|                 |                             | `vfasterexp()`.                                            |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | `-ffp-contract=off`         | Disables multiply-add fusion to keep output bit-identical  |
-|                 | (compiler flag)             | across ISAs.                                               |
-+-----------------+-----------------------------+------------------------------------------------------------+
-| Dependency/IO   | htslib 1.9 -> 1.24          | Replaces byte-at-a-time FASTA reads with a block-read      |
-|                 |                             | implementation.                                            |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | libdeflate enabled          | Activates a previously unused BGZF decompression path.     |
-+-----------------+-----------------------------+------------------------------------------------------------+
-| CLI flags       | `--threads`                 | Sets worker thread count; auto-detected from hardware if   |
-|                 |                             | unset.                                                     |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | `--lib-from-samp`           | Assigns library name from sample name when LB tags are     |
-|                 |                             | absent.                                                    |
-|                 +-----------------------------+------------------------------------------------------------+
-|                 | `--output-hap-fields`       | Adds extra FORMAT fields describing full assembled         |
-|                 |                             | haplotypes.                                                |
-+-----------------+-----------------------------+------------------------------------------------------------+
-
-: Summary of code-level changes introduced in HipSTR-MT, grouped by category (parallelization, thread safety, memory, vectorization, dependency/I/O, and CLI flags), with the effect of each change on behavior or performance. Items are code changes unless specified as compiler flags. Full implementation detail for each entry is provided in the repository README.
+```{=latex}
+\begingroup\small\raggedcells
+\begin{longtable}[]{@{}
+  p{(\linewidth - 4\tabcolsep) * \real{0.1650}}
+  p{(\linewidth - 4\tabcolsep) * \real{0.2750}}
+  p{(\linewidth - 4\tabcolsep) * \real{0.5600}}@{}}
+\caption{Summary of code-level changes introduced in HipSTR-MT, grouped by category (parallelization, thread safety, memory, vectorization, dependency/I/O, and CLI flags), with the effect of each change on behavior or performance. Items are code changes unless specified as compiler flags. Full implementation detail for each entry is provided in the repository README.}\tabularnewline
+\firstheadrow
+\endfirsthead%
+\toprule
+Category & Change & Effect \\
+\midrule
+\endhead%
+\multirow{4}{=}{Parallelization} & Taskflow pipeline & Reads, filters, and writes regions across three concurrent stages. \\
+\itemrule
+ & SNP-phasing safety & Mutexes protect shared phasing state across worker threads. \\
+\itemrule
+ & Output buffering & Per-thread output buffers are flushed in original region order. \\
+\itemrule
+ & Lock-free VCF records & Workers render VCF lines as text without holding the output lock. \\
+\midrule
+\multirow{2}{=}{Thread safety} & StutterAligner buffers & Per-\texttt{HapAligner} scratch buffers eliminate a shared-state race. \\
+\itemrule
+ & Cephes \texttt{bdtr} mutex & Guards a non-reentrant function used in allele-bias computation. \\
+\midrule
+\multirow{5}{=}{Memory} & HapAligner buffer reuse & Reuses per-aligner scratch buffers across reads instead of reallocating. \\
+\itemrule
+ & ASCII case conversion & Replaces locale-aware \texttt{toupper}/\texttt{tolower} in hot per-base loops. \\
+\itemrule
+ & \texttt{fast\_log\_sum\_exp} overload & Pointer-pair variant avoids a vector copy at call sites. \\
+\itemrule
+ & mimalloc & Reduces allocator overhead from small per-read/per-locus allocations. \\
+\itemrule
+ & Chromosome cache + eviction & Chromosomes shared across workers instead of duplicating per thread. Evicted once there are no workers using it. \\
+\midrule
+\multirow{5}{=}{Vectorization} & \texttt{-flto=auto} (compiler flag) & Enables link-time optimization across translation units. \\
+\itemrule
+ & \texttt{target\_clones} dispatch & Builds one code variant per ISA; dispatches to the best at runtime. \\
+\itemrule
+ & libmvec \texttt{exp()} & Vectorizes the exponential reduction with correctly-rounded results. \\
+\itemrule
+ & SSE batching & Processes four elements per instruction via \texttt{vfasterexp()}. \\
+\itemrule
+ & \texttt{-ffp-contract=off} (compiler flag) & Disables multiply-add fusion to keep output bit-identical across ISAs. \\
+\midrule
+\multirow{2}{=}{Dependency/IO} & htslib 1.9 -\textgreater{} 1.24 & Replaces byte-at-a-time FASTA reads with a block-read implementation. \\
+\itemrule
+ & libdeflate enabled & Activates a previously unused BGZF decompression path. \\
+\midrule
+\multirow{3}{=}{CLI flags} & \texttt{-\/-threads} & Sets worker thread count; auto-detected from hardware if unset. \\
+\itemrule
+ & \texttt{-\/-lib-from-samp} & Assigns library name from sample name when LB tags are absent. \\
+\itemrule
+ & \texttt{-\/-output-hap-fields} & Adds extra FORMAT fields describing full assembled haplotypes. \\
+\bottomrule
+\end{longtable}
+\endgroup
+```
 
 # Performance and correctness
 
-![Performance results from processing the full NA12891 genome for all 1.5M+ STRs. a) Runtime vs. thread count. b) Parallel speedup vs. thread count, with data points annotated with scaling efficiency. c) Peak memory vs. thread count. d) CPU utilization vs. thread count.\label{fig:performance}](figures/figure2_performance.png)
+![Performance results from processing the full NA12891 genome for all 1.5M+ STRs. a) Runtime vs. thread count. b) Parallel speedup vs. thread count, with data points annotated with scaling efficiency. c) Peak memory vs. thread count. d) CPU utilization vs. thread count.\label{fig:performance}](figures/figure2_performance.png){ width=85% }
 
 Benchmarks used the NA12891 sample (accession ERR194160) against the genome-wide hg19 STR panel (1,512,240 loci):
 
